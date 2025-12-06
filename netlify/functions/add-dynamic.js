@@ -1,6 +1,7 @@
 import { getStore } from "@netlify/blobs";
 
 export default async function handler(event, context) {
+  // 处理跨域预检请求
   if (event.method === "OPTIONS") {
     return new Response(JSON.stringify({}), {
       status: 200,
@@ -27,13 +28,32 @@ export default async function handler(event, context) {
       });
     }
 
+    // 新增：检查请求体是否存在
+    if (!event.body) {
+      return new Response(JSON.stringify({ 
+        success: false, 
+        message: "请求体不能为空" 
+      }), {
+        status: 400,
+        headers: {
+          "Content-Type": "application/json",
+          "Access-Control-Allow-Origin": "*"
+        }
+      });
+    }
+
     let body;
     try {
-      body = event.body ? JSON.parse(event.body) : {};
+      body = JSON.parse(event.body);
+      // 新增：验证解析后的body是否为对象
+      if (typeof body !== 'object' || body === null) {
+        throw new Error("解析结果不是有效的JSON对象");
+      }
     } catch (parseErr) {
       return new Response(JSON.stringify({ 
         success: false, 
-        message: "请求体格式错误（需 JSON）" 
+        message: `请求体格式错误（需JSON）：${parseErr.message}`,
+        rawBody: event.body // 仅在开发环境调试用，生产环境可移除
       }), {
         status: 400,
         headers: {
@@ -43,11 +63,26 @@ export default async function handler(event, context) {
       });
     }
 
+    // 增强内容验证
     const { content } = body;
-    if (!content || content.trim() === "") {
+    if (content === undefined || content === null) {
       return new Response(JSON.stringify({ 
         success: false, 
-        message: "动态内容不能为空" 
+        message: "缺少必要参数：content" 
+      }), {
+        status: 400,
+        headers: {
+          "Content-Type": "application/json",
+          "Access-Control-Allow-Origin": "*"
+        }
+      });
+    }
+    
+    const trimmedContent = content.trim();
+    if (trimmedContent === "") {
+      return new Response(JSON.stringify({ 
+        success: false, 
+        message: "动态内容不能为空（不能只包含空格）" 
       }), {
         status: 400,
         headers: {
@@ -57,6 +92,7 @@ export default async function handler(event, context) {
       });
     }
 
+    // 以下为原有逻辑，保持不变
     const now = new Date();
     const datetimeStr = now.toLocaleString("zh-CN", {
       year: "numeric", month: "2-digit", day: "2-digit",
@@ -65,7 +101,7 @@ export default async function handler(event, context) {
 
     const newDynamic = {
       id: Date.now().toString(),
-      content: content.trim(),
+      content: trimmedContent,
       datetime: datetimeStr,
       timestamp: now.getTime(),
       noiseVotes: {}
