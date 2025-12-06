@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>瓦学弟动态跟踪系统 | 游戏风监控面板</title>
+    <title>瓦学弟动态跟踪系统</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.8/dist/chart.umd.min.js"></script>
@@ -81,11 +81,23 @@
             background-attachment: fixed;
             padding-bottom: 180px;
         }
-        @media (max-width: 768px) {
-            body {
-                padding-bottom: 220px;
-            }
-        }
+/* 在现有样式中添加以下内容 */
+@media (max-width: 768px) {
+    .view-switch-container {
+        padding: 0 10px;
+        box-sizing: border-box;
+    }
+    #dynamic-view-btn, #wordcloud-view-btn {
+        padding: 1.5px 4px;
+        font-size: 12px;
+        flex: 1; /* 让按钮平分宽度 */
+        justify-content: center;
+    }
+    /* 调整底部输入区高度，避免遮挡 */
+    footer {
+        padding: 8px 4px;
+    }
+}
         .wordcloud-container {
             height: 400px;
             width: 100%;
@@ -98,7 +110,7 @@
         <div class="container mx-auto px-4 py-3 flex flex-col md:flex-row justify-between items-center gap-2">
             <h1 class="text-2xl font-bold text-purple-400 flex items-center">
                 <i class="fa fa-crosshairs mr-2 text-purple-300 animate-pulse"></i>瓦学弟动态跟踪系统
-                <span class="ml-3 text-xs bg-purple-700/80 px-2 py-1 rounded-full">Netlify Blobs同步版 v1.4</span>
+                <span class="ml-3 text-xs bg-purple-700/80 px-2 py-1 rounded-full">Netlify Blobs同步版 v20.47</span>
             </h1>
             <span id="current-date" class="text-gray-300 font-medium flex items-center">
                 <i class="fa fa-calendar-o mr-1 text-purple-400"></i>加载中...
@@ -191,12 +203,12 @@
     <script>
         // ===================== 前端调用 Netlify Functions 封装 =====================
         // 统一函数请求地址前缀
-        const FUNCTION_BASE_URL = "/.netlify/functions";
+        const FUNCTION_BASE_URL = "";
 
         // 1. 获取所有动态
         async function getDynamics() {
             try {
-                const response = await fetch(`${FUNCTION_BASE_URL}/get-dynamics`);
+                const response = await fetch(`/.netlify/functions/get-dynamics`);
                 const data = await response.json();
                 return data.dynamics || [];
             } catch (err) {
@@ -206,72 +218,68 @@
         }
 
         // 2. 新增动态
-        // 定义函数基础路径（必须正确）
-const FUNCTION_BASE_URL = `${window.location.origin}/.netlify/functions`;
-
-// 新增动态的核心函数
+        // 修改 addDynamicToCloud 函数 (约在 index.html 217-258行)
 async function addDynamicToCloud(content) {
-  try {
-    const response = await fetch(`${FUNCTION_BASE_URL}/add-dynamic`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content })
-    });
-
-    // 检查响应状态
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({ message: "请求失败" }));
-      throw new Error(errorData.message || `HTTP 错误：${response.status}`);
-    }
-
-    const result = await response.json();
-    return result.success;
-  } catch (err) {
-    alert("发布失败：" + err.message);
-    console.error("发布错误详情：", err);
-    return false;
-  }
-}
-
-// 按钮点击事件绑定（确保按钮 ID 是 add-dynamic）
-document.addEventListener('DOMContentLoaded', () => {
-  const addBtn = document.getElementById('add-dynamic');
-  const contentInput = document.getElementById('dynamic-content'); // 输入框 ID 要匹配
-
-  if (addBtn && contentInput) {
-    addBtn.addEventListener('click', async () => {
-      const content = contentInput.value.trim();
-      if (!content) {
-        alert("请输入动态内容！");
-        return;
-      }
-
-      // 禁用按钮防止重复点击
-      addBtn.disabled = true;
-      addBtn.textContent = "发布中...";
-
-      // 调用发布函数
-      const success = await addDynamicToCloud(content);
-      if (success) {
-        contentInput.value = "";
-        alert("发布成功！");
-        // 刷新动态列表（如果有 renderDynamics 函数）
-        if (typeof renderDynamics === 'function') {
-          renderDynamics();
+    try {
+        // 1. 极端防护：确保content是字符串，空值直接拦截
+        if (typeof content !== 'string') content = String(content || '');
+        const cleanContent = content.trim();
+        if (!cleanContent) {
+            alert('内容不能为空！');
+            return false;
         }
-      }
 
-      // 恢复按钮
-      addBtn.disabled = false;
-      addBtn.textContent = "发布";
-    });
-  }
-});
+        // 2. 构建绝对合法的JSON对象
+        const requestData = { content: cleanContent };
+        let requestBody;
+        try {
+            // 强制JSON序列化，捕获任何序列化错误
+            requestBody = JSON.stringify(requestData);
+        } catch (jsonErr) {
+            throw new Error(`JSON序列化失败：${jsonErr.message}`);
+        }
+
+        // 3. 发送请求（加兜底头信息）
+        const response = await fetch(`/.netlify/functions/add-dynamic`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json; charset=utf-8", // 明确编码
+                "Accept": "application/json",
+                "X-Requested-With": "XMLHttpRequest" // 防跨域拦截
+            },
+            body: requestBody,
+            mode: "cors", // 强制CORS模式
+            cache: "no-cache" // 禁用缓存
+        });
+
+        // 4. 容错处理响应（即使响应不是JSON也能捕获）
+        const responseText = await response.text();
+        console.log('服务器原始响应：', responseText); // 调试用，可保留
+
+        let result;
+        try {
+            result = JSON.parse(responseText);
+        } catch (parseErr) {
+            throw new Error(`服务器返回非JSON格式：${responseText.substring(0, 100)}`);
+        }
+
+        // 5. 业务错误提示
+        if (!result.success) {
+            throw new Error(result.message || '发布失败，未知原因');
+        }
+
+        return true;
+    } catch (err) {
+        alert("发布失败：" + err.message);
+        console.error('发布详细错误：', err);
+        return false;
+    }
+}
 
         // 3. 更新噪音投票
         async function updateNoiseVote(dynamicId, level) {
             try {
-                const response = await fetch(`${FUNCTION_BASE_URL}/update-noise-vote`, {
+                const response = await fetch(`/.netlify/functions/update-noise-vote`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ dynamicId, level })
@@ -287,7 +295,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // 4. 删除单条动态
         async function deleteDynamicFromCloud(dynamicId) {
             try {
-                const response = await fetch(`${FUNCTION_BASE_URL}/delete-dynamic`, {
+                const response = await fetch(`/.netlify/functions/delete-dynamic`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ dynamicId })
@@ -303,7 +311,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // 5. 清空所有动态
         async function clearAllDynamicsFromCloud() {
             try {
-                const response = await fetch(`${FUNCTION_BASE_URL}/clear-all-dynamics`, {
+                const response = await fetch(`/.netlify/functions/clear-all-dynamics`, {
                     method: "POST"
                 });
                 const result = await response.json();
@@ -593,5 +601,3 @@ document.addEventListener('DOMContentLoaded', () => {
     </script>
 </body>
 </html>
-
-
