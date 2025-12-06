@@ -1,0 +1,5 @@
+# 修正后的 netlify.toml（仅保留核心必要配置，消除解析错误）
+[build]
+  functions = "netlify/functions"  # 必须：指定函数目录（等号后必须有空格）
+
+# 移除易出错的 [functions] 全局配置块（小场景无需额外配置，使用默认值即可）
