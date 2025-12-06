@@ -546,3 +546,13 @@
     </script>
 </body>
 </html>
+
+// 补充完整视图切换代码
+wordcloudViewBtn.addEventListener('click', () => {
+  dynamicView.classList.add('hidden');
+  wordcloudView.classList.remove('hidden');
+  wordcloudView.classList.add('block');
+  dynamicViewBtn.classList.remove('active');
+  wordcloudViewBtn.classList.add('active');
+  updateWordcloud(); // 确保词云图更新
+});// 补充完整视图切换代码
