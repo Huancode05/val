@@ -1,105 +1,54 @@
-import { kv } from "@netlify/functions";
+const { getStore } = require("@netlify/blobs");
 
-exports.handler = async (event, context) => {
-  if (event.httpMethod === "OPTIONS") {
+exports.handler = async (event) => {
+  if (event.httpMethod !== "POST") {
     return {
-      statusCode: 200,
-      headers: {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type"
-      },
-      body: "{}"
+      statusCode: 405,
+      headers: { "Access-Control-Allow-Origin": "*" },
+      body: JSON.stringify({ success: false, message: "仅支持 POST 请求" })
     };
   }
 
+  let data;
   try {
-    if (event.httpMethod !== "POST") {
-      return {
-        statusCode: 405,
-        headers: {
-          "Content-Type": "application/json",
-          "Access-Control-Allow-Origin": "*",
-          "Allow": "POST"
-        },
-        body: JSON.stringify({ success: false, message: "仅支持 POST 请求" })
-      };
-    }
-
-    let body;
-    try {
-      body = event.body ? JSON.parse(event.body) : {};
-    } catch (parseErr) {
-      return {
-        statusCode: 400,
-        headers: {
-          "Content-Type": "application/json",
-          "Access-Control-Allow-Origin": "*"
-        },
-        body: JSON.stringify({ success: false, message: "请求体格式错误（需 JSON）" })
-      };
-    }
-
-    const { dynamicId, level } = body;
-    if (!dynamicId || !["low", "medium", "high"].includes(level)) {
-      return {
-        statusCode: 400,
-        headers: {
-          "Content-Type": "application/json",
-          "Access-Control-Allow-Origin": "*"
-        },
-        body: JSON.stringify({
-          success: false,
-          message: "参数错误：dynamicId 必传，level 仅支持 low/medium/high"
-        })
-      };
-    }
-
-    const rawData = (await kv.get("all-dynamics")) || "[]";
-    const dynamics = JSON.parse(rawData);
-
-    const targetDynamic = dynamics.find(d => d.id === dynamicId);
-    if (!targetDynamic) {
-      return {
-        statusCode: 404,
-        headers: {
-          "Content-Type": "application/json",
-          "Access-Control-Allow-Origin": "*"
-        },
-        body: JSON.stringify({ success: false, message: "动态不存在" })
-      };
-    }
-
-    const userId = event.headers["x-nf-client-ip"] || `user_${Math.random().toString(36).substr(2, 9)}`;
-    targetDynamic.noiseVotes = targetDynamic.noiseVotes || {};
-    targetDynamic.noiseVotes[userId] = level;
-
-    await kv.set("all-dynamics", JSON.stringify(dynamics));
-
+    data = JSON.parse(event.body);
+  } catch {
     return {
-      statusCode: 200,
-      headers: {
-        "Content-Type": "application/json",
-        "Access-Control-Allow-Origin": "*"
-      },
-      body: JSON.stringify({ success: true })
-    };
-  } catch (err) {
-    return {
-      statusCode: 500,
-      headers: {
-        "Content-Type": "application/json",
-        "Access-Control-Allow-Origin": "*"
-      },
-      body: JSON.stringify({
-        success: false,
-        message: `更新投票失败：${err.message}`
-      })
+      statusCode: 400,
+      headers: { "Access-Control-Allow-Origin": "*" },
+      body: JSON.stringify({ success: false, message: "请求体错误" })
     };
   }
-};
 
-exports.config = {
-  memoryMB: 128,
-  timeoutSeconds: 10
+  const { id, voteType } = data;
+  if (!id || !voteType) {
+    return {
+      statusCode: 400,
+      headers: { "Access-Control-Allow-Origin": "*" },
+      body: JSON.stringify({ success: false, message: "缺少参数" })
+    };
+  }
+
+  const store = getStore("dynamics");
+  const list = await store.get("list", { type: "json" }) || [];
+
+  const item = list.find(v => v.id === id);
+  if (!item) {
+    return {
+      statusCode: 404,
+      headers: { "Access-Control-Allow-Origin": "*" },
+      body: JSON.stringify({ success: false, message: "动态不存在" })
+    };
+  }
+
+  item.noiseVotes = item.noiseVotes || {};
+  item.noiseVotes[voteType] = (item.noiseVotes[voteType] || 0) + 1;
+
+  await store.set("list", list, { type: "json" });
+
+  return {
+    statusCode: 200,
+    headers: { "Access-Control-Allow-Origin": "*" },
+    body: JSON.stringify({ success: true })
+  };
 };

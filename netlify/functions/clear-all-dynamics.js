@@ -1,57 +1,20 @@
-import { kv } from "@netlify/functions";
+const { getStore } = require("@netlify/blobs");
 
-exports.handler = async (event, context) => {
-  if (event.httpMethod === "OPTIONS") {
-    return {
-      statusCode: 200,
-      headers: {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type"
-      },
-      body: "{}"
-    };
-  }
-
+exports.handler = async () => {
   try {
-    if (event.httpMethod !== "POST") {
-      return {
-        statusCode: 405,
-        headers: {
-          "Content-Type": "application/json",
-          "Access-Control-Allow-Origin": "*",
-          "Allow": "POST"
-        },
-        body: JSON.stringify({ success: false, message: "仅支持 POST 请求" })
-      };
-    }
+    const store = getStore("dynamics");
 
-    await kv.set("all-dynamics", JSON.stringify([]));
+    await store.set("list", [], { type: "json" });
 
     return {
       statusCode: 200,
-      headers: {
-        "Content-Type": "application/json",
-        "Access-Control-Allow-Origin": "*"
-      },
+      headers: { "Access-Control-Allow-Origin": "*" },
       body: JSON.stringify({ success: true })
     };
   } catch (err) {
     return {
       statusCode: 500,
-      headers: {
-        "Content-Type": "application/json",
-        "Access-Control-Allow-Origin": "*"
-      },
-      body: JSON.stringify({
-        success: false,
-        message: `清空动态失败：${err.message}`
-      })
+      body: JSON.stringify({ success: false, error: err.message })
     };
   }
-};
-
-exports.config = {
-  memoryMB: 128,
-  timeoutSeconds: 10
 };
