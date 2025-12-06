@@ -206,20 +206,67 @@
         }
 
         // 2. 新增动态
-        async function addDynamicToCloud(content) {
-            try {
-                const response = await fetch(`${FUNCTION_BASE_URL}/add-dynamic`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ content })
-                });
-                const result = await response.json();
-                return result.success;
-            } catch (err) {
-                alert("发布失败：" + err.message);
-                return false;
-            }
+        // 定义函数基础路径（必须正确）
+const FUNCTION_BASE_URL = `${window.location.origin}/.netlify/functions`;
+
+// 新增动态的核心函数
+async function addDynamicToCloud(content) {
+  try {
+    const response = await fetch(`${FUNCTION_BASE_URL}/add-dynamic`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content })
+    });
+
+    // 检查响应状态
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ message: "请求失败" }));
+      throw new Error(errorData.message || `HTTP 错误：${response.status}`);
+    }
+
+    const result = await response.json();
+    return result.success;
+  } catch (err) {
+    alert("发布失败：" + err.message);
+    console.error("发布错误详情：", err);
+    return false;
+  }
+}
+
+// 按钮点击事件绑定（确保按钮 ID 是 add-dynamic）
+document.addEventListener('DOMContentLoaded', () => {
+  const addBtn = document.getElementById('add-dynamic');
+  const contentInput = document.getElementById('dynamic-content'); // 输入框 ID 要匹配
+
+  if (addBtn && contentInput) {
+    addBtn.addEventListener('click', async () => {
+      const content = contentInput.value.trim();
+      if (!content) {
+        alert("请输入动态内容！");
+        return;
+      }
+
+      // 禁用按钮防止重复点击
+      addBtn.disabled = true;
+      addBtn.textContent = "发布中...";
+
+      // 调用发布函数
+      const success = await addDynamicToCloud(content);
+      if (success) {
+        contentInput.value = "";
+        alert("发布成功！");
+        // 刷新动态列表（如果有 renderDynamics 函数）
+        if (typeof renderDynamics === 'function') {
+          renderDynamics();
         }
+      }
+
+      // 恢复按钮
+      addBtn.disabled = false;
+      addBtn.textContent = "发布";
+    });
+  }
+});
 
         // 3. 更新噪音投票
         async function updateNoiseVote(dynamicId, level) {
