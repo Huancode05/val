@@ -2,6 +2,6 @@
   "name": "waxuedi-dynamic-tracker",
   "version": "1.4.0",
   "dependencies": {
-    "@netlify/blobs": "^7.0.0"
+
   }
 }
